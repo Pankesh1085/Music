@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Music Downloader</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+  <style>
+    body {
+      font-family: 'Inter', sans-serif;
+      background: #f0f2f5;
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+      min-height: 100vh;
+      padding: 40px 20px;
+      margin: 0;
+    }
+    .container {
+      background: #fff;
+      padding: 30px;
+      border-radius: 12px;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
+      max-width: 700px;
+      width: 100%;
+    }
+    h1 {
+      margin-bottom: 25px;
+      color: #1db954;
+      text-align: center;
+    }
+    form {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 20px;
+    }
+    input[type="text"] {
+      flex: 1;
+      padding: 12px 15px;
+      border: 1px solid #ccc;
+      border-radius: 8px;
+    }
+    button {
+      background: #1db954;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      padding: 12px 20px;
+      cursor: pointer;
+    }
+    button:disabled {
+      background: #cccccc;
+      cursor: not-allowed;
+    }
+    .section {
+      margin-top: 25px;
+    }
+    .queue-item {
+      padding: 12px;
+      margin-bottom: 8px;
+      border-radius: 5px;
+    }
+    .current {
+      background: #e0f7ec;
+      border-left: 4px solid #1db954;
+    }
+    .queued {
+      background: #fff6e5;
+      border-left: 4px solid #ffcc00;
+    }
+    #connectionStatus {
+      padding: 8px;
+      border-radius: 4px;
+      margin-bottom: 10px;
+      font-weight: bold;
+    }
+    .connected {
+      background: #e6f7ee;
+      color: #1db954;
+    }
+    .disconnected {
+      background: #ffebee;
+      color: #f44336;
+    }
+    #statusLog {
+      max-height: 150px;
+      overflow-y: auto;
+      font-size: 0.9em;
+    }
+    .log-entry {
+      padding: 4px 0;
+      border-bottom: 1px solid #eee;
+    }
+    .success {
+      color: #1db954;
+    }
+    .error {
+      color: #f44336;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🎧 Music Downloader</h1>
+    
+    <form id="downloadForm">
+      <input type="text" id="spotifyUrl" placeholder="Paste Spotify URL" required>
+      <button type="submit" id="submitBtn">⬇️ Add</button>
+    </form>
+
+    <div class="section">
+      <h2>📋 Download Queue</h2>
+      <div id="connectionStatus">Connecting...</div>
+      <div id="queueContainer"></div>
+    </div>
+
+    <div class="section">
+      <h2>📜 Activity Log</h2>
+      <div id="statusLog"></div>
+    </div>
+  </div>
+
+  <script>
+    const form = document.getElementById('downloadForm');
+    const submitBtn = document.getElementById('submitBtn');
+    const queueContainer = document.getElementById('queueContainer');
+    const statusLog = document.getElementById('statusLog');
+    const connectionStatus = document.getElementById('connectionStatus');
+
+    let socket;
+    let reconnectAttempts = 0;
+    const maxReconnectAttempts = 5;
+
+    function connectWebSocket() {
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const wsUrl = `${protocol}//${window.location.host}/ws`;
+      
+      socket = new WebSocket(wsUrl);
+
+      socket.onopen = () => {
+        reconnectAttempts = 0;
+        connectionStatus.textContent = "✅ Connected";
+        connectionStatus.className = "connected";
+        logActivity("Connected to server", "success");
+      };
+
+      socket.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+        
+        if (data.type === "connection") {
+          return;
+        }
+
+        updateQueue(data);
+        
+        if (data.completed) {
+          if (data.completed.success) {
+            logActivity(`Download complete: ${data.completed.title}`, "success");
+          } else {
+            logActivity(`Download failed: ${data.completed.title}`, "error");
+          }
+        }
+      };
+
+      socket.onclose = () => {
+        connectionStatus.textContent = "❌ Disconnected";
+        connectionStatus.className = "disconnected";
+        
+        if (reconnectAttempts < maxReconnectAttempts) {
+          reconnectAttempts++;
+          setTimeout(connectWebSocket, 3000);
+        }
+      };
+
+      socket.onerror = (error) => {
+        logActivity(`Connection error: ${error.message}`, "error");
+      };
+    }
+
+    function updateQueue(data) {
+      queueContainer.innerHTML = '';
+      
+      if (data.current) {
+        const item = document.createElement('div');
+        item.className = 'queue-item current';
+        item.textContent = `Downloading: ${data.current.title}`;
+        queueContainer.appendChild(item);
+      }
+
+      data.queue.forEach(item => {
+        const queueItem = document.createElement('div');
+        queueItem.className = 'queue-item queued';
+        queueItem.textContent = `Queued: ${item.title}`;
+        queueContainer.appendChild(queueItem);
+      });
+
+      if (!data.current && data.queue.length === 0) {
+        const emptyItem = document.createElement('div');
+        emptyItem.className = 'queue-item';
+        emptyItem.textContent = 'Queue is empty';
+        queueContainer.appendChild(emptyItem);
+      }
+    }
+
+    function logActivity(message, type) {
+      const now = new Date();
+      const entry = document.createElement('div');
+      entry.className = `log-entry ${type}`;
+      entry.textContent = `[${now.toLocaleTimeString()}] ${message}`;
+      statusLog.appendChild(entry);
+      statusLog.scrollTop = statusLog.scrollHeight;
+    }
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const url = document.getElementById('spotifyUrl').value.trim();
+      
+      if (!url) {
+        logActivity("Please enter a URL", "error");
+        return;
+      }
+
+      submitBtn.disabled = true;
+      
+      try {
+        const response = await fetch('/submit', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ query: url })
+        });
+        
+        const result = await response.json();
+        if (response.ok) {
+          logActivity(`Added to queue: ${url}`, "success");
+          document.getElementById('spotifyUrl').value = '';
+        } else {
+          logActivity(`Error: ${result.error}`, "error");
+        }
+      } catch (error) {
+        logActivity("Network error", "error");
+      } finally {
+        submitBtn.disabled = false;
+      }
+    });
+
+    // Initialize WebSocket connection
+    connectWebSocket();
+  </script>
+</body>
+</html>
