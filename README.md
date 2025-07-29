@@ -16,7 +16,7 @@ This project is **NOT** for piracy. By using this software, you agree:
 ### Automated Setup (Linux/Ubuntu)
 ```bash
 sudo apt update && sudo apt install -y git && \
-git clone https://github.com/Pankesh1085/Music && \
+git clone https://github.com/Pankesh1085/Music.git && \
 cd Music && \
 cd chmod +x install.sh \
 sudo ./install.sh
