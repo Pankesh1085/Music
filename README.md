@@ -16,6 +16,7 @@ This project is **NOT** for piracy. By using this software, you agree:
 ### Automated Setup (Linux/Ubuntu)
 ```bash
 sudo apt update && sudo apt install -y git && \
-git clone https://github.com/yourusername/spotify-downloader.git && \
-cd spotify-downloader && \
-sudo ./auto-install.sh
+git clone https://github.com/Pankesh1085/Music && \
+cd Music && \
+cd chmod +x install.sh \
+sudo ./install.sh
